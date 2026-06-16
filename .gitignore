@@ -1,8 +1,10 @@
-Dependências
+# Dependências
 node_modules/
 
+# Variáveis de ambiente — NUNCA commitar o .env real
 .env
 
+# Builds do frontend
 frontend/dist/
 frontend/build/
 jogo-frontend/dist/

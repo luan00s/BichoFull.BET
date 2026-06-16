@@ -6,12 +6,10 @@ const options = {
     info: {
       title: "BichoFull API",
       version: "1.0.0",
+      description:
+        "API do sistema de simulação do Jogo do Bicho — fins educacionais (IFAM Campus Parintins).",
     },
-    servers: [
-      {
-        url: "http://localhost:3000",
-      },
-    ],
+    servers: [{ url: `http://localhost:${process.env.PORT || 3000}` }],
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -25,6 +23,4 @@ const options = {
   apis: ["./routes/*.js"],
 };
 
-const specs = swaggerJsdoc(options);
-
-module.exports = specs;
+module.exports = swaggerJsdoc(options);

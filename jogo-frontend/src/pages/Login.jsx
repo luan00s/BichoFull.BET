@@ -15,21 +15,19 @@ function Login({ setTela }) {
     try {
       const res = await fetch(`${API}/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, senha }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.token) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("nome", data.usuario?.nome || "usuário");
-        localStorage.setItem("email", data.usuario?.email || email);
-        localStorage.setItem("saldo", String(data.usuario?.saldo ?? 1000));
+        localStorage.setItem("token",    data.token);
+        localStorage.setItem("nome",     data.usuario?.nome  || "usuário");
+        localStorage.setItem("email",    data.usuario?.email || email);
+        localStorage.setItem("saldo",    String(data.usuario?.saldo ?? 1000));
+        localStorage.setItem("is_admin", String(data.usuario?.is_admin || false));
 
-        alert(data.mensagem || "Login realizado com sucesso");
         window.location.reload();
       } else {
         alert(data.erro || "Login inválido");

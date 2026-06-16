@@ -1,201 +1,110 @@
 const db = require("../database/connection");
 
-function sortearMilhar() {
-  return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
-}
-
-function gerarCincoPremios() {
-  const premios = [];
-  const usados = new Set();
-
-  while (premios.length < 5) {
-    const numero = sortearMilhar();
-    if (!usados.has(numero)) {
-      usados.add(numero);
-      premios.push(numero);
-    }
-  }
-
-  return premios;
-}
-
-function obterGrupoPorDezena(dezena) {
-  const dezenaNum = Number(dezena === "00" ? 100 : dezena);
-  return Math.ceil(dezenaNum / 4);
-}
-
 exports.criarAposta = (req, res) => {
   const user_id = req.user?.id;
   const { animal, tipoAposta, valor, dezena, milhar } = req.body || {};
 
-  console.log("DADOS RECEBIDOS NA APOSTA:", {
-    user_id,
-    animal,
-    tipoAposta,
-    valor,
-    dezena,
-    milhar,
-  });
-
   if (!user_id) {
-    return res.status(401).json({
-      erro: "Usuário não autenticado",
-    });
+    return res.status(401).json({ erro: "Usuário não autenticado" });
   }
 
   if (!tipoAposta || valor === undefined || valor === null || valor === "") {
-    return res.status(400).json({
-      erro: "Dados incompletos",
-    });
+    return res.status(400).json({ erro: "Dados incompletos. Informe tipoAposta e valor" });
   }
 
   const tiposValidos = ["grupo", "dezena", "milhar"];
-
   if (!tiposValidos.includes(tipoAposta)) {
-    return res.status(400).json({
-      erro: "Tipo de aposta inválido",
-    });
+    return res.status(400).json({ erro: "Tipo de aposta inválido. Use: grupo, dezena ou milhar" });
   }
 
   const valorNumerico = Number(valor);
-
   if (isNaN(valorNumerico) || valorNumerico <= 0) {
-    return res.status(400).json({
-      erro: "Valor inválido",
-    });
+    return res.status(400).json({ erro: "Valor inválido. Deve ser um número positivo" });
   }
 
+  
   if (tipoAposta === "grupo") {
-    const animalNumerico = Number(animal);
-
-    if (isNaN(animalNumerico) || animalNumerico < 1 || animalNumerico > 25) {
-      return res.status(400).json({
-        erro: "Animal inválido",
-      });
+    const animalNum = Number(animal);
+    if (isNaN(animalNum) || animalNum < 1 || animalNum > 25) {
+      return res.status(400).json({ erro: "Animal inválido. Informe um número entre 1 e 25" });
     }
   }
 
   if (tipoAposta === "dezena" && !/^\d{2}$/.test(String(dezena))) {
-    return res.status(400).json({
-      erro: "Dezena inválida",
-    });
+    return res.status(400).json({ erro: "Dezena inválida. Informe exatamente 2 dígitos (00 a 99)" });
   }
 
   if (tipoAposta === "milhar" && !/^\d{4}$/.test(String(milhar))) {
-    return res.status(400).json({
-      erro: "Milhar inválida",
-    });
+    return res.status(400).json({ erro: "Milhar inválida. Informe exatamente 4 dígitos (0000 a 9999)" });
   }
 
-  db.query(
-    "SELECT saldo FROM usuarios WHERE id = ?",
-    [user_id],
-    (err, result) => {
+  
+  db.beginTransaction((errTx) => {
+    if (errTx) return res.status(500).json({ erro: "Erro interno. Tente novamente" });
+
+  
+    db.query("SELECT saldo FROM usuarios WHERE id = ? FOR UPDATE", [user_id], (err, result) => {
       if (err) {
-        console.error("ERRO AO BUSCAR SALDO:", err);
-        return res.status(500).json({
-          erro: "Erro ao buscar saldo",
-        });
+        return db.rollback(() => res.status(500).json({ erro: "Erro ao buscar saldo" }));
       }
 
       if (result.length === 0) {
-        return res.status(404).json({
-          erro: "Usuário não encontrado",
-        });
+        return db.rollback(() => res.status(404).json({ erro: "Usuário não encontrado" }));
       }
 
       const saldoAtual = Number(result[0].saldo);
 
       if (saldoAtual < valorNumerico) {
-        return res.status(400).json({
-          erro: "Saldo insuficiente",
-        });
+        return db.rollback(() =>
+          res.status(400).json({
+            erro: "Saldo insuficiente",
+            saldo_atual: saldoAtual,
+            valor_aposta: valorNumerico,
+          })
+        );
       }
 
-      const premios = gerarCincoPremios();
-      const primeiroPremio = premios[0];
-      const dezenaPrimeiroPremio = primeiroPremio.slice(-2);
-      const grupoPrimeiroPremio = obterGrupoPorDezena(dezenaPrimeiroPremio);
-
-      let valorGanho = 0;
-      let resultado = "PERDEU";
-
-      if (tipoAposta === "grupo") {
-        if (Number(animal) === grupoPrimeiroPremio) {
-          valorGanho = valorNumerico * 18;
-          resultado = "GANHOU";
-        }
-      }
-
-      if (tipoAposta === "dezena") {
-        if (String(dezena) === dezenaPrimeiroPremio) {
-          valorGanho = valorNumerico * 60;
-          resultado = "GANHOU";
-        }
-      }
-
-      if (tipoAposta === "milhar") {
-        if (String(milhar) === primeiroPremio) {
-          valorGanho = valorNumerico * 4000;
-          resultado = "GANHOU";
-        }
-      }
-
-      const saldoFinal = saldoAtual - valorNumerico + valorGanho;
+      const novoSaldo = saldoAtual - valorNumerico;
 
       db.query(
         "UPDATE usuarios SET saldo = ? WHERE id = ?",
-        [saldoFinal, user_id],
+        [novoSaldo, user_id],
         (errUpdate) => {
           if (errUpdate) {
-            console.error("ERRO AO ATUALIZAR SALDO:", errUpdate);
-            return res.status(500).json({
-              erro: "Erro ao atualizar saldo",
-            });
+            return db.rollback(() => res.status(500).json({ erro: "Erro ao debitar saldo" }));
           }
 
           db.query(
-            `INSERT INTO apostas
-            (user_id, animal, tipo_aposta, valor, dezena, milhar, resultado, premio_1, premio_2, premio_3, premio_4, premio_5, valor_ganho)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO apostas (user_id, tipo_aposta, valor, animal, dezena, milhar, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'pendente')`,
             [
               user_id,
-              animal || null,
               tipoAposta,
               valorNumerico,
-              dezena || null,
-              milhar || null,
-              resultado,
-              premios[0],
-              premios[1],
-              premios[2],
-              premios[3],
-              premios[4],
-              valorGanho,
+              tipoAposta === "grupo"  ? Number(animal) : null,
+              tipoAposta === "dezena" ? String(dezena) : null,
+              tipoAposta === "milhar" ? String(milhar) : null,
             ],
-            (errInsert) => {
+            (errInsert, insertResult) => {
               if (errInsert) {
-                console.error("ERRO AO REGISTRAR APOSTA:", errInsert);
-                return res.status(500).json({
-                  erro: "Erro ao registrar aposta",
-                  detalhe: errInsert.sqlMessage || errInsert.message,
-                });
+                return db.rollback(() => res.status(500).json({ erro: "Erro ao registrar aposta" }));
               }
 
-              return res.json({
-                mensagem: "Aposta registrada com sucesso",
-                resultado,
-                saldo_restante: saldoFinal,
-                premios,
-                primeiro_premio: primeiroPremio,
-                grupo_primeiro_premio: grupoPrimeiroPremio,
-                dezena_primeiro_premio: dezenaPrimeiroPremio,
-                valor_ganho: valorGanho,
+              db.commit((errCommit) => {
+                if (errCommit) {
+                  return db.rollback(() => res.status(500).json({ erro: "Erro ao confirmar aposta" }));
+                }
+
+                return res.status(201).json({
+                  mensagem: "Aposta registrada com sucesso. Aguarde o próximo sorteio para ver o resultado.",
+                  aposta_id: insertResult.insertId,
+                  saldo_restante: novoSaldo,
+                });
               });
             }
           );
         }
       );
-    }
-  );
+    });
+  });
 };

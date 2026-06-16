@@ -1,14 +1,25 @@
 const express = require("express");
-const router = express.Router();
+const router  = express.Router();
 
-const { verificarToken } = require("../middlewares/authMiddleware");
 const { listarHistorico } = require("../controllers/historicoController");
+const { verificarToken }  = require("../middlewares/authMiddleware");
+
+/**
+ * @swagger
+ * tags:
+ *   name: Histórico
+ *   description: Histórico de apostas do usuário (RF08)
+ */
 
 /**
  * @swagger
  * /historico:
  *   get:
- *     summary: Lista o histórico de apostas do usuário
+ *     summary: Lista o histórico de apostas do usuário autenticado (RF08)
+ *     description: >
+ *       Retorna todas as apostas do usuário, pendentes e processadas.
+ *       Para apostas processadas, inclui os prêmios do sorteio vinculado,
+ *       o resultado (GANHOU/PERDEU) e o valor ganho.
  *     tags: [Histórico]
  *     security:
  *       - bearerAuth: []
