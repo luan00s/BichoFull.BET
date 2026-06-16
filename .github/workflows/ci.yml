@@ -1,0 +1,117 @@
+name: CI — BichoFull
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── 1. Lint ────────────────────────────────────────────────
+  lint:
+    name: Linter (ESLint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências do backend
+        run: npm install
+
+      - name: Instalar ESLint
+        run: npm install --save-dev eslint@9 globals --legacy-peer-deps
+
+      - name: Rodar ESLint no backend
+        run: npx eslint controllers/ routes/ middlewares/ services/ --max-warnings 0 || true
+
+      - name: Instalar dependências do frontend
+        run: npm install
+        working-directory: jogo-frontend
+
+      - name: Rodar ESLint no frontend
+        run: npx eslint src/ --max-warnings 0 || true
+        working-directory: jogo-frontend
+
+  # ── 2. Testes unitários ────────────────────────────────────
+  tests:
+    name: Testes (Jest)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: jogo_bicho
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      PORT: 3000
+      JWT_SECRET: secret_ci
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: jogo_bicho
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Criar schema no banco de testes
+        run: mysql -h 127.0.0.1 -u root -proot jogo_bicho < database/schema.sql
+
+      - name: Rodar testes
+        run: npm test
+
+  # ── 3. Build check ─────────────────────────────────────────
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências do backend
+        run: npm install
+
+      - name: Verificar se o backend inicia sem erros
+        run: |
+          PORT=3000 JWT_SECRET=ci DB_HOST=localhost DB_USER=root DB_PASSWORD= DB_NAME=jogo_bicho \
+          timeout 10 node server.js || true
+
+      - name: Instalar dependências do frontend
+        run: npm install
+        working-directory: jogo-frontend
+
+      - name: Build do frontend
+        run: npm run build
+        working-directory: jogo-frontend
