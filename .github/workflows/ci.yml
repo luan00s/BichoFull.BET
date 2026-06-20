@@ -83,7 +83,9 @@ jobs:
         run: mysql -h 127.0.0.1 -u root -proot jogo_bicho < database/schema.sql
 
       - name: Rodar testes
-        run: npx jest --forceExit
+        run: |
+          chmod +x node_modules/.bin/jest
+          npx jest --forceExit
 
   # ── 3. Build check ─────────────────────────────────────────
   build:
