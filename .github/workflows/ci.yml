@@ -80,7 +80,7 @@ jobs:
         run: npm install
 
       - name: Criar schema no banco de testes
-        run: mysql -h 127.0.0.1 -u root -proot jogo_bicho < database/jogo_bicho.sql
+        run: mysql -h 127.0.0.1 -u root -proot jogo_bicho < database/schema.sql
 
       - name: Rodar testes
         run: npm test
